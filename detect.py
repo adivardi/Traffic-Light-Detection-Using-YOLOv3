@@ -80,6 +80,11 @@ def detect(save_img=False):
     t0 = time.time()
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img.float()) if device.type != 'cpu' else None  # run once
+
+    s_mean_tot = 0
+    v_mean_tot = 0
+    n_imgs = 0
+    n_det = 0
     for path, img, im0s, vid_cap, frame, nframes in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -135,6 +140,16 @@ def detect(save_img=False):
                         # label = '%s %.2f' % (names[int(cls)], conf)
                         label = '%s' % (names[int(cls)])
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
+
+                # compute HSV
+                s_mean, v_mean = computeSV(im0)
+                # print(f"s_mean: {s_mean}, v_mean: {v_mean}")
+                s_mean_tot += s_mean
+                v_mean_tot += v_mean
+                n_imgs += 1
+                # print(f"--- TOTAL: s_mean: {s_mean_tot/n_imgs}, v_mean: {v_mean_tot/n_imgs}, n_imgs: {n_imgs}")
+
+                n_det += 1
 
             # Print time (inference + NMS)
             # print('%sDone. (%.3fs)' % (s, t2 - t1))
