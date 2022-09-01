@@ -42,7 +42,7 @@ def exif_size(img):
 
 
 class LoadImages:  # for inference
-    def __init__(self, path, img_size=416):
+    def __init__(self, path, img_size, **kwargs):
         path = str(Path(path))  # os-agnostic
         files = []
         if os.path.isdir(path):
@@ -65,6 +65,9 @@ class LoadImages:  # for inference
             self.cap = None
         assert self.nF > 0, 'No images or videos found in %s. Supported formats are:\nimages: %s\nvideos: %s' % \
                             (path, img_formats, vid_formats)
+
+        if 'rotate' in kwargs:
+            self.rotate_ = kwargs.get('rotate', False)
 
     def __iter__(self):
         self.count = 0
@@ -101,6 +104,9 @@ class LoadImages:  # for inference
             self.frame = 1
             self.nframes = 1
 
+        if self.rotate_:
+            img0 = cv2.rotate(img0, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
+
         # Padded resize
         img = letterbox(img0, new_shape=self.img_size)[0]
 
@@ -108,7 +114,7 @@ class LoadImages:  # for inference
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         img = np.ascontiguousarray(img)
 
-        # cv2.imwrite(path + '.letterbox.jpg', 255 * img.transpose((1, 2, 0))[:, :, ::-1])  # save letterbox image
+        cv2.imwrite(path + '.letterbox.jpg', 255 * img.transpose((1, 2, 0))[:, :, ::-1])  # save letterbox image
         return path, img, img0, self.cap, self.frame, self.nframes
 
     def new_video(self, path):

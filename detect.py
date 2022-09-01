@@ -7,6 +7,7 @@ import cv2
 from IPython import embed
 
 
+ROTATE_IMAGE = False
 def detect(save_img=False):
     imgsz = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
     out, source, weights, half, view_img, save_txt = opt.output, opt.source, opt.weights, opt.half, opt.view_img, opt.save_txt
@@ -69,7 +70,7 @@ def detect(save_img=False):
         dataset = LoadStreams(source, img_size=imgsz)
     else:
         # save_img = True
-        dataset = LoadImages(source, img_size=imgsz)
+        dataset = LoadImages(source, img_size=imgsz, rotate=ROTATE_IMAGE)
 
     # Get names and colors
     names = load_classes(opt.names)
@@ -192,6 +193,7 @@ def detect(save_img=False):
     print(f"Source: {source}")
     print(f"Average FPS: {nframes/(time.time() - t0)}")
     print(f"number of frames with detection: {n_det}")
+    print(f"ROTATE_IMAGE: {ROTATE_IMAGE}")
 
 
 if __name__ == '__main__':
