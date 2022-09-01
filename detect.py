@@ -12,6 +12,9 @@ NORMALIZE_SAT_VALUE = True
 SAT_DESIRED = 165.0
 VALUE_DESIRED = 85.0
 ROTATE_IMAGE = False
+SEARCH_BEST = False
+
+
 def computeSV(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     return (hsv[:, :, 1].mean(), hsv[:, :, 2].mean())
@@ -95,7 +98,12 @@ def detect(save_img=False):
     s_mean_tot = 0
     v_mean_tot = 0
     n_imgs = 0
-    n_det = 0
+    n_images_detected = 0
+    n_det_window = list()
+    best_det_avg = 0.0
+    best_det_avg_frames = list()
+    current_best_frames = list()
+
     for path, img, im0s, vid_cap, frame, nframes in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -136,9 +144,23 @@ def detect(save_img=False):
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
                 # Print results
+                n_green = 0
+                n_red = 0
+                n_yellow = 0
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += '%g %ss, ' % (n, names[int(c)])  # add to string
+
+                    if int(c) == 0:
+                        n_green = n
+                    elif int(c) == 1:
+                        n_red = n
+                    elif int(c) == 4:
+                        n_yellow = n
+
+                # print(f"img.shape: {img.shape}")
+                print(p)
+                print(f"detections: {len(det)}   :   {s}")
 
                 # Write results
                 for *xyxy, conf, cls in det:
@@ -161,7 +183,37 @@ def detect(save_img=False):
                     print(f"s_mean: {s_mean}, v_mean: {v_mean}")
                     print(f"--- TOTAL: s_mean: {s_mean_tot/n_imgs}, v_mean: {v_mean_tot/n_imgs}, n_imgs: {n_imgs}")
 
-                n_det += 1
+                n_images_detected += 1
+
+                if SEARCH_BEST:
+                    n_det_window.append(len(det))
+                    if len(n_det_window) > 10:
+                        n_det_window.pop(0)
+
+                    n_det_avg = sum(n_det_window) / len(n_det_window)
+
+                    # if n_det_avg >= best_det_avg:
+                    #     best_det_avg = n_det_avg
+                    #     current_best_frames.clear()
+                    # if n_det_avg == best_det_avg:
+                    #     best_det_avg_frames.append(p)
+
+                    MIN_DET_AVG = 4.3  # 4 TLs + the wrong sign
+                    # if n_det_avg >= MIN_DET_AVG:
+                    if n_red >= 5 or n_green >= 4:
+                        # if n_green >= 4:
+                        current_best_frames.append(p)
+                        # cv2.imwrite(save_path, im0)
+                    # if n_det_avg < MIN_DET_AVG:
+                    else:
+                        if current_best_frames:
+                            best_det_avg_frames.append(current_best_frames.copy())
+                            current_best_frames.clear()
+                            print(p)
+                            print(f"current_best_frames: {current_best_frames}")
+
+                            print(s)
+                            print(f"detections avg: {n_det_avg}")
 
             # Print time (inference + NMS)
             # print('%sDone. (%.3fs)' % (s, t2 - t1))
@@ -199,6 +251,8 @@ def detect(save_img=False):
         if platform == 'darwin':  # MacOS
             os.system('open ' + save_path)
 
+    best_det_avg_frames.append(current_best_frames)
+
     print("------------------------------------------------")
     print('Done. (%.3fs)' % (time.time() - t0))
     print(f"Source: {source}")
@@ -209,6 +263,8 @@ def detect(save_img=False):
         print(f"sat mean desired: {SAT_DESIRED} , value mean desired: {VALUE_DESIRED}")
     print(f"ROTATE_IMAGE: {ROTATE_IMAGE}")
 
+    print(f"best_det_avg avg: {best_det_avg}")
+    print(f"best_det_avg_frames: {best_det_avg_frames}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
