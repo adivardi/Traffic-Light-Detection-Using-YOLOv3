@@ -7,6 +7,9 @@ import cv2
 from IPython import embed
 
 
+NORMALIZE_SAT_VALUE = True
+SAT_DESIRED = 165.0
+VALUE_DESIRED = 85.0
 ROTATE_IMAGE = False
 def detect(save_img=False):
     imgsz = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
@@ -70,7 +73,8 @@ def detect(save_img=False):
         dataset = LoadStreams(source, img_size=imgsz)
     else:
         # save_img = True
-        dataset = LoadImages(source, img_size=imgsz, rotate=ROTATE_IMAGE)
+        dataset = LoadImages(source, img_size=imgsz, rotate=ROTATE_IMAGE,
+                             normalize=NORMALIZE_SAT_VALUE, sat_desired=SAT_DESIRED, value_desired=VALUE_DESIRED)
 
     # Get names and colors
     names = load_classes(opt.names)
@@ -192,7 +196,10 @@ def detect(save_img=False):
     print('Done. (%.3fs)' % (time.time() - t0))
     print(f"Source: {source}")
     print(f"Average FPS: {nframes/(time.time() - t0)}")
-    print(f"number of frames with detection: {n_det}")
+    print(f"number of frames with detection: {n_images_detected}")
+    print(f"NORMALIZE_SAT_VALUE: {NORMALIZE_SAT_VALUE}")
+    if NORMALIZE_SAT_VALUE:
+        print(f"sat mean desired: {SAT_DESIRED} , value mean desired: {VALUE_DESIRED}")
     print(f"ROTATE_IMAGE: {ROTATE_IMAGE}")
 
 

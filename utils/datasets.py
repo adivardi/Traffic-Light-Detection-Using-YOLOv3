@@ -41,6 +41,21 @@ def exif_size(img):
     return s
 
 
+def adjustSV(img, sat_desired, value_desired):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    s_mean = hsv[:, :, 1].mean()
+    V_mean = hsv[:, :, 2].mean()
+    s_ratio = sat_desired / s_mean
+    V_ratio = value_desired / V_mean
+
+    # hsv[:, :, 1] *= sat_mult
+    # hsv[:, :, 2] *= value_mult
+    hsv[:, :, 1] = cv2.convertScaleAbs(hsv[:, :, 1], alpha=s_ratio, beta=0.0)
+    hsv[:, :, 2] = cv2.convertScaleAbs(hsv[:, :, 2], alpha=V_ratio, beta=0.0)
+
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+
 class LoadImages:  # for inference
     def __init__(self, path, img_size, **kwargs):
         path = str(Path(path))  # os-agnostic
@@ -67,6 +82,9 @@ class LoadImages:  # for inference
                             (path, img_formats, vid_formats)
 
         self.rotate_ = kwargs.get('rotate', False)
+        self.normalize = kwargs.get('normalize', False)
+        self.sat_desired = kwargs.get('sat_desired', 0)
+        self.value_desired = kwargs.get('value_desired', 0)
 
     def __iter__(self):
         self.count = 0
@@ -105,6 +123,10 @@ class LoadImages:  # for inference
 
         if self.rotate_:
             img0 = cv2.rotate(img0, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        if self.normalize:
+            cv2.imshow("orig", img0)
+            img0 = adjustSV(img0, self.sat_desired, self.value_desired)
 
         # Padded resize
         img = letterbox(img0, new_shape=self.img_size)[0]
