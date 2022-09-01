@@ -7,10 +7,16 @@ import cv2
 from IPython import embed
 
 
+COMPUTE_SAT_VALUE = False
 NORMALIZE_SAT_VALUE = True
 SAT_DESIRED = 165.0
 VALUE_DESIRED = 85.0
 ROTATE_IMAGE = False
+def computeSV(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    return (hsv[:, :, 1].mean(), hsv[:, :, 2].mean())
+
+
 def detect(save_img=False):
     imgsz = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
     out, source, weights, half, view_img, save_txt = opt.output, opt.source, opt.weights, opt.half, opt.view_img, opt.save_txt
@@ -147,12 +153,13 @@ def detect(save_img=False):
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
                 # compute HSV
-                s_mean, v_mean = computeSV(im0)
-                # print(f"s_mean: {s_mean}, v_mean: {v_mean}")
-                s_mean_tot += s_mean
-                v_mean_tot += v_mean
-                n_imgs += 1
-                # print(f"--- TOTAL: s_mean: {s_mean_tot/n_imgs}, v_mean: {v_mean_tot/n_imgs}, n_imgs: {n_imgs}")
+                if COMPUTE_SAT_VALUE:
+                    s_mean, v_mean = computeSV(im0)
+                    s_mean_tot += s_mean
+                    v_mean_tot += v_mean
+                    n_imgs += 1
+                    print(f"s_mean: {s_mean}, v_mean: {v_mean}")
+                    print(f"--- TOTAL: s_mean: {s_mean_tot/n_imgs}, v_mean: {v_mean_tot/n_imgs}, n_imgs: {n_imgs}")
 
                 n_det += 1
 
