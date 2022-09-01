@@ -3,6 +3,8 @@ import argparse
 from models import *  # set ONNX_EXPORT in models.py
 from utils.datasets import *
 from utils.utils import *
+import cv2
+from IPython import embed
 
 
 def detect(save_img=False):
@@ -66,13 +68,13 @@ def detect(save_img=False):
         torch.backends.cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz)
     else:
-        save_img = True
+        # save_img = True
         dataset = LoadImages(source, img_size=imgsz)
 
     # Get names and colors
     names = load_classes(opt.names)
     # colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(names))]
-    colors = [(0, 255, 0), (0, 0, 255), (0, 0, 155), (0, 200, 200), (29, 118, 255), (0 , 118, 255)]
+    colors = [(0, 255, 0), (0, 0, 255), (0, 0, 155), (0, 200, 200), (29, 118, 255), (0, 118, 255)]
 
     # Run inference
     t0 = time.time()
@@ -110,7 +112,7 @@ def detect(save_img=False):
                 p, s, im0 = path, '', im0s
 
             save_path = str(Path(out) / Path(p).name)
-            print(save_path)
+            # print(save_path)
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  #  normalization gain whwh
             if det is not None and len(det):
@@ -135,17 +137,19 @@ def detect(save_img=False):
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
             # Print time (inference + NMS)
-            print('%sDone. (%.3fs)' % (s, t2 - t1))
+            # print('%sDone. (%.3fs)' % (s, t2 - t1))
 
             # Stream results
+            nframes = 100
             if view_img:
-                cv2.imshow(p, im0)
+                cv2.imshow("img", im0)
                 if nframes == 1:
                     cv2.waitKey(0)
                 elif nframes > 1:
                     if cv2.waitKey(1) & 0xFF == ord('q'):  # q to quit
                         print(f"Average FPS: {frame/(time.time() - t0)}")
                         raise StopIteration
+                # time.sleep(0.05)
 
             # Save results (image with detections)
             if save_img:
@@ -168,8 +172,11 @@ def detect(save_img=False):
         if platform == 'darwin':  # MacOS
             os.system('open ' + save_path)
 
+    print("------------------------------------------------")
     print('Done. (%.3fs)' % (time.time() - t0))
+    print(f"Source: {source}")
     print(f"Average FPS: {nframes/(time.time() - t0)}")
+    print(f"number of frames with detection: {n_det}")
 
 
 if __name__ == '__main__':
@@ -186,7 +193,7 @@ if __name__ == '__main__':
     parser.add_argument('--half', action='store_true', help='half precision FP16 inference')
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1) or cpu')
     parser.add_argument('--view-img', action='store_true', help='display results')
-    parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
+    parser.add_argument('--save-txt', action='store_false', help='save results to *.txt')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class')
     parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
@@ -195,5 +202,6 @@ if __name__ == '__main__':
     opt.names = check_file(opt.names)  # check file
     print(opt)
 
+    cv2.namedWindow('img', cv2.WINDOW_NORMAL)
     with torch.no_grad():
         detect()
