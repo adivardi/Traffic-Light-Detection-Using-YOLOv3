@@ -66,8 +66,7 @@ class LoadImages:  # for inference
         assert self.nF > 0, 'No images or videos found in %s. Supported formats are:\nimages: %s\nvideos: %s' % \
                             (path, img_formats, vid_formats)
 
-        if 'rotate' in kwargs:
-            self.rotate_ = kwargs.get('rotate', False)
+        self.rotate_ = kwargs.get('rotate', False)
 
     def __iter__(self):
         self.count = 0
