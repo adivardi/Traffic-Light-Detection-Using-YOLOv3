@@ -2,16 +2,20 @@ import argparse
 
 from models import *  # set ONNX_EXPORT in models.py
 from utils.datasets import *
+from utils.plots import colors  # , Annotator, colors, save_one_box
 from utils.utils import *
 import cv2
 from IPython import embed
 
 
 COMPUTE_SAT_VALUE = False
-NORMALIZE_SAT_VALUE = True
-SAT_DESIRED = 165.0
-VALUE_DESIRED = 85.0
+NORMALIZE_SAT_VALUE = False
+SAT_DESIRED = 128.0
+VALUE_DESIRED = 116.0
 ROTATE_IMAGE = False
+
+CROP_IMAGE = [0.2, 0, 0.6, 1.0]
+
 SEARCH_BEST = False
 
 
@@ -69,6 +73,7 @@ def detect(save_img=False):
         print(onnx.helper.printable_graph(model.graph))  # Print a human readable representation of the graph
         return
 
+    print(model)
     # Half precision
     half = half and device.type != 'cpu'  # half precision only supported on CUDA
     if half:
@@ -83,12 +88,13 @@ def detect(save_img=False):
     else:
         # save_img = True
         dataset = LoadImages(source, img_size=imgsz, rotate=ROTATE_IMAGE,
-                             normalize=NORMALIZE_SAT_VALUE, sat_desired=SAT_DESIRED, value_desired=VALUE_DESIRED)
+                             normalize=NORMALIZE_SAT_VALUE, crop=CROP_IMAGE, sat_desired=SAT_DESIRED, value_desired=VALUE_DESIRED)
 
     # Get names and colors
     names = load_classes(opt.names)
+    print(f"names ({len(names)}): {names}")
     # colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(names))]
-    colors = [(0, 255, 0), (0, 0, 255), (0, 0, 155), (0, 200, 200), (29, 118, 255), (0, 118, 255)]
+    # colors = [(0, 255, 0), (0, 0, 255), (0, 0, 155), (0, 200, 200), (29, 118, 255), (0, 118, 255)]
 
     # Run inference
     t0 = time.time()
@@ -105,6 +111,14 @@ def detect(save_img=False):
     current_best_frames = list()
 
     for path, img, im0s, vid_cap, frame, nframes in dataset:
+        # if CROP_IMAGE:
+        #     # center = np.array((im0s.shape[0] / 2, im0s.shape[1] / 2,), dtype=int)
+        #     # size_half = np.array((imgsz / 2, imgsz / 2), dtype=int)
+        #     # min_coords = center - size_half
+        #     # max_coords = center + size_half
+        #     # im0s = im0s[min_coords[0]:max_coords[0], min_coords[1]:max_coords[1]]
+        #     im0s = cv2.resize(im0s, ((imgsz // 2, imgsz // 2)))
+
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -113,7 +127,12 @@ def detect(save_img=False):
 
         # Inference
         t1 = torch_utils.time_synchronized()
+
+        # pred is a tensor with shape [1, ??, no. classes + 5]. Each row of includes (center x, center y, width, height) followed by raw (non-normalized) scores per class
         pred = model(img, augment=opt.augment)[0]
+
+        # print(pred.shape)
+        # print(pred[0][0, :])
         t2 = torch_utils.time_synchronized()
 
         # to float
@@ -121,8 +140,15 @@ def detect(save_img=False):
             pred = pred.float()
 
         # Apply NMS
+        # Performs Non-Maximum Suppression on inference results
+        # Returns detections as a list of a single element. The element is a tensor with the shape N x 6,
+        # where N is the number of detected objects, for each object there are 6 measurements - (x1, y1, x2, y2, confidence, class)
+        # print(opt.conf_thres)
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres,
                                    multi_label=False, classes=opt.classes, agnostic=opt.agnostic_nms)
+
+        # print(len(pred))
+        # print(pred[0])
 
         # Apply Classifier
         if classify:
@@ -137,9 +163,10 @@ def detect(save_img=False):
 
             save_path = str(Path(out) / Path(p).name)
             # print(save_path)
-            s += '%gx%g ' % img.shape[2:]  # print string
+            # s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  #  normalization gain whwh
             if det is not None and len(det):
+                # print(f"detections: {len(det)}")
                 # Rescale boxes from imgsz to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
@@ -159,20 +186,22 @@ def detect(save_img=False):
                         n_yellow = n
 
                 # print(f"img.shape: {img.shape}")
-                print(p)
-                print(f"detections: {len(det)}   :   {s}")
+                # print(p)
+                # print(f"{p} : detections: {len(det)}   :   {s}")
+                print(f"{Path(p).name} : ", end='')
 
                 # Write results
                 for *xyxy, conf, cls in det:
+                    xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                    print(f"{int(cls)} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]}  |  ", end='')
                     if save_txt:  # Write to file
-                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         with open(save_path[:save_path.rfind('.')] + '.txt', 'a') as file:
                             file.write(('%g ' * 5 + '\n') % (cls, *xywh))  # label format
 
                     if save_img or view_img:  # Add bbox to image
                         # label = '%s %.2f' % (names[int(cls)], conf)
                         label = '%s' % (names[int(cls)])
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
+                        plot_one_box(xyxy, im0, label=label, color=colors(int(cls), True))
 
                 # compute HSV
                 if COMPUTE_SAT_VALUE:
@@ -214,6 +243,9 @@ def detect(save_img=False):
 
                             print(s)
                             print(f"detections avg: {n_det_avg}")
+                print("")
+            else:
+                print(f"{Path(p).name} : None")
 
             # Print time (inference + NMS)
             # print('%sDone. (%.3fs)' % (s, t2 - t1))
@@ -221,14 +253,18 @@ def detect(save_img=False):
             # Stream results
             nframes = 100
             if view_img:
+                # print(f"Average FPS: {frame/(time.time() - t0)}")
                 cv2.imshow("img", im0)
                 if nframes == 1:
                     cv2.waitKey(0)
                 elif nframes > 1:
-                    if cv2.waitKey(1) & 0xFF == ord('q'):  # q to quit
-                        print(f"Average FPS: {frame/(time.time() - t0)}")
+                    key = cv2.waitKey(1)
+                    if key == ord('q'):  # q to quit
                         raise StopIteration
-                # time.sleep(0.05)
+                    if key == ord(' '):
+                        cv2.waitKey(0)
+                # cv2.waitKey(0)
+                # time.sleep(0.03)
 
             # Save results (image with detections)
             if save_img:
@@ -266,6 +302,7 @@ def detect(save_img=False):
     print(f"best_det_avg avg: {best_det_avg}")
     print(f"best_det_avg_frames: {best_det_avg_frames}")
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp-6cls.cfg', help='*.cfg path')
@@ -289,6 +326,6 @@ if __name__ == '__main__':
     opt.names = check_file(opt.names)  # check file
     print(opt)
 
-    cv2.namedWindow('img', cv2.WINDOW_NORMAL)
+    cv2.namedWindow('img', cv2.WINDOW_FULLSCREEN)
     with torch.no_grad():
         detect()

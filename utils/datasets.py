@@ -13,7 +13,6 @@ import torch
 from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
-
 from utils.utils import xyxy2xywh, xywh2xyxy
 
 help_url = 'https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data'
@@ -48,10 +47,20 @@ def adjustSV(img, sat_desired, value_desired):
     s_ratio = sat_desired / s_mean
     V_ratio = value_desired / V_mean
 
+    # print("BEFORE")
+    # print(f"s_mean: {s_mean}")
+    # print(f"V_mean: {V_mean}")
+    # print(f"s_ratio: {s_ratio}")
+    # print(f"V_ratio: {V_ratio}")
+
     # hsv[:, :, 1] *= sat_mult
     # hsv[:, :, 2] *= value_mult
     hsv[:, :, 1] = cv2.convertScaleAbs(hsv[:, :, 1], alpha=s_ratio, beta=0.0)
     hsv[:, :, 2] = cv2.convertScaleAbs(hsv[:, :, 2], alpha=V_ratio, beta=0.0)
+
+    # print("AFTER: ")
+    # print(f"s_mean: {hsv[:, :, 1].mean()}")
+    # print(f"V_mean: {hsv[:, :, 2].mean()}")
 
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
@@ -85,6 +94,7 @@ class LoadImages:  # for inference
         self.normalize = kwargs.get('normalize', False)
         self.sat_desired = kwargs.get('sat_desired', 0)
         self.value_desired = kwargs.get('value_desired', 0)
+        self.crop = kwargs.get('crop', [])
 
     def __iter__(self):
         self.count = 0
@@ -121,6 +131,11 @@ class LoadImages:  # for inference
             self.frame = 1
             self.nframes = 1
 
+        if self.crop:
+            h, w, _ = img0.shape
+            limits = [int(x) for x in [self.crop[0] * h, self.crop[1] * w, self.crop[2] * h, self.crop[3] * w]]
+            img0 = img0[limits[0]: limits[2], limits[1]: limits[3]]
+
         if self.rotate_:
             img0 = cv2.rotate(img0, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
 
@@ -135,7 +150,7 @@ class LoadImages:  # for inference
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         img = np.ascontiguousarray(img)
 
-        cv2.imwrite(path + '.letterbox.jpg', 255 * img.transpose((1, 2, 0))[:, :, ::-1])  # save letterbox image
+        # cv2.imwrite(path + '.letterbox.jpg', 255 * img.transpose((1, 2, 0))[:, :, ::-1])  # save letterbox image
         return path, img, img0, self.cap, self.frame, self.nframes
 
     def new_video(self, path):
